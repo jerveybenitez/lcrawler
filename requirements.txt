@@ -1,0 +1,5 @@
+patchright
+openai>=1.30
+python-dotenv
+beautifulsoup4
+lxml

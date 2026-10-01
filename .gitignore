@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+
+# secrets
+.env
+
+# your LinkedIn login session lives here - never share/commit it
+browser_profile/
+
+# collected data
+data/
+
+# saved real pages may contain personal data - keep them local
+fixtures/*
+!fixtures/synthetic_*.html
+!fixtures/README.md
