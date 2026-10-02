@@ -21,24 +21,89 @@ import search_parser
 
 
 def cmd_login(args):
-    from browser import looks_logged_out, session
+    from browser import has_session, looks_logged_out, session
 
     with session() as ctx:
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
+        try:
+            page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded",
+                      timeout=60_000)
+        except Exception as e:
+            print(f"Page load slow ({type(e).__name__}) - continuing with what loaded.")
+        page.bring_to_front()
+        try:
+            print(f'Browser window is showing: "{(page.title() or "")[:60]}"')
+        except Exception:
+            pass
         if not looks_logged_out(page):
             print("Already logged in. Session is kept in browser_profile/.")
             return
-        print("A browser window is open. Log in BY HAND (email + password + 2FA).")
-        print("Waiting for LinkedIn to let you through (max 10 minutes)...")
+        if has_session(ctx):
+            print("Feed page is loading slowly, but the session cookie (li_at) is")
+            print("ALREADY SAVED in browser_profile/. Login succeeded.")
+            return
+
+        print("A browser window is open. Log in BY HAND in that window")
+        print("(email + password + 2FA / email PIN if asked).")
+        print("Keep the window OPEN - I am watching it. Waiting up to 10 minutes...")
+        url = page.url
         deadline = time.time() + 600
+        last_report = 0.0
         while time.time() < deadline:
-            if not looks_logged_out(page):
+            try:
+                if page.is_closed():
+                    print("Browser window was closed before login finished.")
+                    print("Run `python cli.py login` again and keep the window open")
+                    print("until you see your LinkedIn feed.")
+                    return
+                url = page.url
+            except Exception:
+                print("Browser was closed mid-wait. Run `python cli.py login` again.")
+                return
+            if not looks_logged_out(page) or has_session(ctx):
                 print("Logged in OK. Session saved in browser_profile/ - future runs")
                 print("reuse it automatically until LinkedIn expires the session.")
                 return
+            if time.time() - last_report >= 20:
+                elapsed = int(600 - (deadline - time.time()))
+                print(f"  [{elapsed:>3}s] still logged out - browser is showing: {url[:80]}")
+                if "/checkpoint" in url:
+                    print("         ^ LinkedIn is running a security check - complete it")
+                    print("           in the browser window (PIN/2FA) to continue.")
+                last_report = time.time()
             time.sleep(2)
-        print("Timed out waiting for login. Run `python cli.py login` and try again.")
+        print("Timed out waiting for login.")
+        print(f"Last page the browser showed: {url[:120]}")
+        if has_session(ctx):
+            print("BUT the session cookie was saved - login may have worked anyway.")
+            print("Check with:  python cli.py status")
+        else:
+            print("If that page was a checkpoint or verification screen, complete it")
+            print("fully, then run `python cli.py login` again.")
+
+
+def cmd_status(args):
+    from browser import has_session, looks_logged_out, session
+
+    with session() as ctx:
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        try:
+            page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded",
+                      timeout=60_000)
+        except Exception:
+            pass
+        page.wait_for_timeout(2000)
+        sess = has_session(ctx)
+        logged_out = looks_logged_out(page)
+        print(f"Session cookie (li_at) : {'present' if sess else 'MISSING'}")
+        print(f"Feed reachable as user : {'yes' if not logged_out else 'no'}")
+        if sess and not logged_out:
+            print("STATUS: logged in - ready for capture / search runs.")
+        elif sess and logged_out:
+            print("STATUS: cookie present but LinkedIn is challenging the session.")
+            print("Run `python cli.py login` and complete any checkpoint shown.")
+        else:
+            print("STATUS: logged out. Run `python cli.py login`.")
 
 
 def cmd_capture(args):
@@ -124,6 +189,9 @@ def main():
 
     sub.add_parser("login", help="Open browser; log in by hand once; session is saved"
                    ).set_defaults(func=cmd_login)
+
+    sub.add_parser("status", help="Check whether the saved LinkedIn session is alive"
+                   ).set_defaults(func=cmd_status)
 
     p = sub.add_parser("capture", help="Save the current people-search page as a parser fixture")
     p.add_argument("--name", default="search", help="fixture name prefix")

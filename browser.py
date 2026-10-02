@@ -35,3 +35,15 @@ def looks_logged_out(page) -> bool:
     the session is dead or under challenge."""
     url = page.url or ""
     return any(marker in url for marker in ("/authwall", "/login", "checkpoint"))
+
+
+def has_session(ctx) -> bool:
+    """True if the profile holds LinkedIn's session cookie (li_at).
+
+    Needed because LinkedIn sometimes accepts the login (sets the cookie)
+    but then silently hangs the redirect to /feed/ - the URL stays on
+    /login/ even though the session is live and saved on disk."""
+    try:
+        return any(c.get("name") == "li_at" and c.get("value") for c in ctx.cookies())
+    except Exception:
+        return False

@@ -20,6 +20,12 @@ Playwright) with a persistent profile in `browser_profile/`:
 The login flow itself is never automated — it's the single most scrutinized moment,
 and one manual login lasts a long time. Delete `browser_profile/` to log out.
 
+Known LinkedIn behavior: sometimes it accepts your credentials and saves the
+session cookie, but then silently hangs the redirect to the feed — the window
+stays on the login page even though you're actually logged in. The tool detects
+this via the session cookie (`li_at`), so trust the console message, and use
+`python cli.py status` whenever in doubt.
+
 ## Setup (Windows)
 
 ```
@@ -44,6 +50,7 @@ endpoint with the cheap `qwen-flash` model.
 | 5. Classify | `python cli.py classify` | Or `classify --mock` to test the pipeline offline |
 | 6. Export | `python cli.py export --only-sea --min-score 6` | CSV in `data/`, Excel-friendly |
 | — | `python cli.py stats` | Row counts + today's page budget |
+| — | `python cli.py status` | Is the saved LinkedIn session still alive? |
 
 Offline sanity check without touching LinkedIn (works right after setup):
 
