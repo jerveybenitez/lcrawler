@@ -98,9 +98,44 @@ def _from_json_blobs(html: str) -> list:
 
 # --- strategy 2: DOM heuristics (fallback if markup/class names change) -----
 
+_DEGREE = re.compile(r"(1st|2nd|3rd\+?)\s*$")
+_BULLET = "•"
+
+
 def _from_dom(html: str) -> list:
     soup = BeautifulSoup(html, _PARSER)
     cards = {}
+
+    # Modern markup (2025+): every result card contains a <p> with
+    # "Name • 3rd+" (degree badge); its parent holds two sibling divs -
+    # headline then location. Class names are hashed, this structure isn't.
+    for p in soup.find_all("p"):
+        t = p.get_text(" ", strip=True)
+        if _BULLET not in t or not _DEGREE.search(t):
+            continue
+        a = p.find_parent("a", href=re.compile("/in/"))
+        if not a:
+            continue
+        url = canonical_url(a.get("href", ""))
+        if not url:
+            continue
+        entry = cards.setdefault(
+            url, {"profile_url": url, "name": "", "headline": "", "location": ""}
+        )
+        entry["name"] = entry["name"] or t.split(_BULLET)[0].strip()
+        sib_divs = [
+            d.get_text(" ", strip=True)
+            for d in p.parent.find_all("div", recursive=False)
+            if d.get_text(" ", strip=True)
+        ]
+        if sib_divs:
+            entry["headline"] = entry["headline"] or sib_divs[0]
+        if len(sib_divs) > 1:
+            entry["location"] = entry["location"] or sib_divs[1]
+    if cards:
+        return list(cards.values())
+
+    # Legacy markup: stable entity-result class names (older pages, fixtures).
     for a in soup.select('a[href*="/in/"]'):
         u = canonical_url(a.get("href", ""))
         if not u:

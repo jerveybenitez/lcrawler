@@ -107,24 +107,89 @@ def cmd_status(args):
 
 
 def cmd_capture(args):
-    from browser import session
+    from urllib.parse import quote_plus
 
-    print("A browser window will open. In it, navigate to any LinkedIn PEOPLE SEARCH")
-    print("results page (the list of person cards). I will detect it and save the")
-    print("page HTML as a parser fixture. No automated actions are taken.")
+    from browser import looks_logged_out, session
+
     with session() as ctx:
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+
+        if args.keywords:
+            # Automatic mode: navigate straight to the people-search URL.
+            conn = db.connect()
+            db.init()
+            budget = config.DAILY_PAGE_CAP - db.pages_loaded_today(conn)
+            if budget <= 0:
+                print(f"Daily page cap reached ({config.DAILY_PAGE_CAP})."
+                      " Try again tomorrow.")
+                return
+            url = ("https://www.linkedin.com/search/results/people/?keywords="
+                   + quote_plus(args.keywords))
+            print(f"Opening: {url}")
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+            except Exception as e:
+                print(f"(load raised {type(e).__name__}: {str(e)[:120]} - continuing)")
+            page.wait_for_timeout(5000)  # let the result list render
+            if looks_logged_out(page):
+                print("!! Login wall / challenge detected - fixture NOT saved.")
+                print("   Run:  python cli.py login")
+                return
+            db.log_event(conn, "page_load")  # counts toward the daily budget
+            html = page.content()
+            out = config.FIXTURES_DIR / f"{args.name}_{datetime.now():%Y%m%d_%H%M%S}.html"
+            out.write_text(html, encoding="utf-8")
+            print(f"Fixture saved: {out}")
+            n_links = html.count("/in/")
+            print(f"profile-link markers (/in/) in page: {n_links}")
+            if n_links == 0:
+                print("!! No /in/ links found - results may not have rendered.")
+                print("   Open the fixture in a browser to see what LinkedIn served.")
+            print(f'Verify the parser:  python cli.py parse "{out}"')
+            return
+
+        # Manual fallback: watch for the user to reach a people-search page.
+        print("A browser window will open, already logged in with your saved session.")
+        print("Use the LinkedIn search box (filter: People) to run any people search,")
+        print("or paste a https://www.linkedin.com/search/results/people/... URL")
+        print("into the address bar. When the results list loads, I save that page")
+        print("as a parser fixture.")
+        try:
+            page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded",
+                      timeout=60_000)
+        except Exception as e:
+            print(f"(feed page is slow: {type(e).__name__} - you can navigate manually)")
+        page.bring_to_front()
+        page.wait_for_timeout(4000)  # let LinkedIn's JS hydrate before you type
+        print("Watching for a /search/results/people/ page (up to 10 minutes)...")
         deadline = time.time() + 600
+        last_report = 0.0
         target = None
         while time.time() < deadline and target is None:
+            try:
+                if page.is_closed():
+                    print("Browser window was closed before a search page appeared.")
+                    return
+            except Exception:
+                print("Browser was closed mid-wait.")
+                return
             for p in ctx.pages:
                 if "/search/results/people/" in (p.url or ""):
                     target = p
                     break
+            if time.time() - last_report >= 30:
+                print(f"  ...waiting ({int(600 - (deadline - time.time()))}s in). "
+                      "Run your people search in the browser window.")
+                last_report = time.time()
             time.sleep(1)
         if target is None:
             print("Timed out waiting for a people-search page.")
             return
-        html = target.content()
+        try:
+            html = target.content()
+        except Exception as e:
+            print(f"Could not read the page ({type(e).__name__}). Try capture again.")
+            return
         out = config.FIXTURES_DIR / f"{args.name}_{datetime.now():%Y%m%d_%H%M%S}.html"
         out.write_text(html, encoding="utf-8")
         print(f"Fixture saved: {out}")
@@ -193,8 +258,10 @@ def main():
     sub.add_parser("status", help="Check whether the saved LinkedIn session is alive"
                    ).set_defaults(func=cmd_status)
 
-    p = sub.add_parser("capture", help="Save the current people-search page as a parser fixture")
+    p = sub.add_parser("capture", help="Save a people-search page as a parser fixture")
     p.add_argument("--name", default="search", help="fixture name prefix")
+    p.add_argument("--keywords", default=None,
+                   help='auto-navigate to this people search, e.g. \'"frontend developer" Manila\'')
     p.set_defaults(func=cmd_capture)
 
     p = sub.add_parser("parse", help="Parse an HTML file and print the stubs (offline test)")

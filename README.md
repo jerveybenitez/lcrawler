@@ -44,7 +44,7 @@ endpoint with the cheap `qwen-flash` model.
 | Step | Command | Notes |
 |---|---|---|
 | 1. Login (once) | `python cli.py login` | Log in by hand in the window that opens |
-| 2. Save a real fixture | `python cli.py capture --name frontend_manila` | Navigate to any people-search results page in the opened window; the tool saves its HTML |
+| 2. Save a real fixture | `python cli.py capture --name frontend_manila --keywords "\"frontend developer\" Manila"` | Auto-navigates to the people search and saves the HTML (counts toward the daily page cap). Without `--keywords` it falls back to watching a manual browser session |
 | 3. Verify the parser | `python cli.py parse fixtures/<file>.html` | Add `--save` to also insert stubs into SQLite |
 | 4. First live run | `python cli.py search --keywords "\"frontend developer\" Manila" --pages 2` | Deliberately tiny |
 | 5. Classify | `python cli.py classify` | Or `classify --mock` to test the pipeline offline |

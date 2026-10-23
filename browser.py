@@ -14,15 +14,19 @@ from config import PROFILE_DIR
 
 
 @contextmanager
-def session(headless: bool = False):
+def session(headless: bool = False, **kwargs):
     """Open the persistent, logged-in browser context. Headed (visible) by
-    default because headless mode is itself a bot signal."""
+    default because headless mode is itself a bot signal.
+
+    Extra kwargs (e.g. channel="chrome", no_viewport=True) are forwarded to
+    launch_persistent_context - used for A/B stealth comparisons."""
     from patchright.sync_api import sync_playwright
 
     with sync_playwright() as p:
         ctx = p.chromium.launch_persistent_context(
             str(PROFILE_DIR),
             headless=headless,
+            **kwargs,
         )
         try:
             yield ctx
