@@ -6,6 +6,7 @@ Typical flow:
   python cli.py parse <fixture.html>                           # verify the parser
   python cli.py search --keywords '"frontend developer" Manila' --pages 2
   python cli.py classify                                       # Qwen
+  python cli.py fetch --limit 2                                # full profiles, very slow
   python cli.py export --only-sea --min-score 6
   python cli.py stats
 """
@@ -222,6 +223,14 @@ def cmd_classify(args):
     classify.run(mock=args.mock, limit=args.limit)
 
 
+def cmd_fetch(args):
+    import fetch
+
+    roles = {r.strip() for r in (args.role or "").split(",") if r.strip()}
+    fetch.run(limit=args.limit, min_score=args.min_score, only_sea=args.only_sea,
+              roles=roles)
+
+
 def cmd_export(args):
     import export
 
@@ -278,6 +287,14 @@ def main():
     p.add_argument("--mock", action="store_true", help="offline fake classifier (no key needed)")
     p.add_argument("--limit", type=int, default=None, help="only classify N profiles")
     p.set_defaults(func=cmd_classify)
+
+    p = sub.add_parser("fetch", help="Fetch full profiles (about/experience/education), slowly")
+    p.add_argument("--limit", type=int, default=None,
+                   help=f"default {config.MAX_FETCHES_PER_RUN}")
+    p.add_argument("--min-score", type=float, default=None, help="only relevance >= N")
+    p.add_argument("--only-sea", action="store_true", help="only rows flagged in_sea")
+    p.add_argument("--role", default=None, help="comma list, e.g. frontend,ui_ux,both")
+    p.set_defaults(func=cmd_fetch)
 
     p = sub.add_parser("export", help="Export profiles to CSV")
     p.add_argument("--out", default=None, help="output CSV path (default data/talent_export.csv)")

@@ -9,6 +9,7 @@ COLUMNS = [
     "profile_url", "name", "headline", "location", "company", "source_query",
     "found_at", "classified_at", "role_fit", "seniority", "country", "in_sea",
     "relevance", "reason",
+    "about", "experience", "education", "fetched_at",
 ]
 
 

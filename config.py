@@ -21,5 +21,11 @@ MAX_DELAY_S = float(os.getenv("CRAWL_MAX_DELAY_S", "14"))       # max seconds be
 MAX_PAGES_PER_RUN = int(os.getenv("CRAWL_MAX_PAGES_PER_RUN", "3"))  # hard ceiling per run
 DAILY_PAGE_CAP = int(os.getenv("CRAWL_DAILY_PAGE_CAP", "20"))   # page loads per calendar day
 
+# --- full-profile fetch pacing (fetch command) ------------------------------
+# Profile pages are the most-scrutinized pages on LinkedIn; pace them hard.
+FETCH_MIN_DELAY_S = float(os.getenv("FETCH_MIN_DELAY_S", "30"))     # min wait before each profile
+FETCH_MAX_DELAY_S = float(os.getenv("FETCH_MAX_DELAY_S", "120"))    # max wait before each profile
+MAX_FETCHES_PER_RUN = int(os.getenv("CRAWL_MAX_FETCHES_PER_RUN", "5"))  # ceiling per run
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 FIXTURES_DIR.mkdir(parents=True, exist_ok=True)

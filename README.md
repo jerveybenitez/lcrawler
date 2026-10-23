@@ -48,7 +48,8 @@ endpoint with the cheap `qwen-flash` model.
 | 3. Verify the parser | `python cli.py parse fixtures/<file>.html` | Add `--save` to also insert stubs into SQLite |
 | 4. First live run | `python cli.py search --keywords "\"frontend developer\" Manila" --pages 2` | Deliberately tiny |
 | 5. Classify | `python cli.py classify` | Or `classify --mock` to test the pipeline offline |
-| 6. Export | `python cli.py export --only-sea --min-score 6` | CSV in `data/`, Excel-friendly |
+| 6. Fetch full profiles | `python cli.py fetch --limit 2` | Very slow on purpose: 30–120 s wait before each profile. First fetch saves a `fixtures/profile_*.html` so `profile_parser.py` can be verified on real markup |
+| 7. Export | `python cli.py export --only-sea --min-score 6` | CSV in `data/`, Excel-friendly |
 | — | `python cli.py stats` | Row counts + today's page budget |
 | — | `python cli.py status` | Is the saved LinkedIn session still alive? |
 
@@ -70,6 +71,9 @@ python cli.py stats
 - **Default caps are intentionally small:** 3 pages per run, 20 page loads per day,
   6–14 s randomized delays between loads (see `config.py` / `.env`). Raise slowly,
   only as the account tolerates it.
+- **Profile fetches (step 6) are paced much harder:** a 30–120 s randomized wait
+  *before* every profile page, max 5 per run — and every fetch spends from the same
+  20-page daily budget as search.
 - If LinkedIn shows a *"commercial use limit"* wall, a checkpoint, or anything
   unusual — **stop for the day**.
 - Parsers are developed against **saved fixtures** (`capture`), never against live
@@ -90,7 +94,8 @@ python cli.py stats
 
 1. LLM query-matrix generator: keywords × 5 countries × major cities × seniority,
    including local-language variants (this defines total reach).
-2. Tier-2 detail fetches: full profile visits only for high-relevance hits.
+2. ~~Tier-2 detail fetches~~ **done** — `fetch` pulls about/experience/education for
+   high-relevance profiles (verify `profile_parser.py` on the auto-saved fixture first).
 3. Monthly refresh "drip" for the standing filters.
 4. Optional zero-risk companion layer: SERP x-ray (`site:linkedin.com/in`) + GitHub
    API through the same classify/export pipeline.

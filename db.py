@@ -28,6 +28,14 @@ CREATE TABLE IF NOT EXISTS events (
 );
 """
 
+# Columns added after the initial schema (applied by _migrate on init).
+_DETAIL_COLS = {
+    "about": "TEXT",
+    "experience": "TEXT",
+    "education": "TEXT",
+    "fetched_at": "TEXT",            # NULL until the fetch command pulls the profile
+}
+
 
 def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
@@ -38,6 +46,16 @@ def connect() -> sqlite3.Connection:
 def init() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """ALTER TABLE ADD COLUMN for any _DETAIL_COLS missing from an older DB."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(profiles)")}
+    for col, ddl in _DETAIL_COLS.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE profiles ADD COLUMN {col} {ddl}")
+    conn.commit()
 
 
 def _now_iso() -> str:
@@ -105,3 +123,38 @@ def save_classification(conn: sqlite3.Connection, url: str, c: dict) -> None:
 
 def all_profiles(conn: sqlite3.Connection) -> list:
     return conn.execute("SELECT * FROM profiles ORDER BY relevance DESC, found_at DESC").fetchall()
+
+
+def fetch_queue(conn: sqlite3.Connection, limit: int, min_score=None, roles=None,
+                only_sea=False) -> list:
+    """Profiles we haven't fetched yet, best/relevant first."""
+    sql = "SELECT * FROM profiles WHERE fetched_at IS NULL"
+    params: list = []
+    if min_score is not None:
+        sql += " AND relevance >= ?"
+        params.append(min_score)
+    if only_sea:
+        sql += " AND in_sea = 1"
+    if roles:
+        marks = ",".join("?" for _ in roles)
+        sql += f" AND role_fit IN ({marks})"
+        params.extend(roles)
+    sql += " ORDER BY relevance DESC, found_at ASC LIMIT ?"
+    params.append(limit)
+    return conn.execute(sql, params).fetchall()
+
+
+def save_profile_detail(conn: sqlite3.Connection, url: str, detail: dict) -> None:
+    conn.execute(
+        """UPDATE profiles
+           SET about = ?, experience = ?, education = ?, fetched_at = ?
+           WHERE profile_url = ?""",
+        (
+            detail.get("about"),
+            detail.get("experience"),
+            detail.get("education"),
+            _now_iso(),
+            url,
+        ),
+    )
+    conn.commit()
